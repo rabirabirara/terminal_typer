@@ -219,7 +219,7 @@ fn play(game: &Game) -> Option<Score> {
     // TODO: change mode selection to ingame prompt.
     return match game.mode {
         Mode::TimeAttack => play_time(game),
-        _ => play_race_endless(game),
+        _ => play_race_or_endless(game),
     };
 }
 
@@ -273,7 +273,7 @@ fn play_time(game: &Game) -> Option<Score> {
     Some(temp)
 }
 
-fn play_race_endless(game: &Game) -> Option<Score> {
+fn play_race_or_endless(game: &Game) -> Option<Score> {
     count_down(3, &game.mode);
 
     let mut words_done: u32 = 0;
