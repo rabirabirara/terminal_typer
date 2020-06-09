@@ -35,6 +35,8 @@ enum Mode {
     Race,
 }
 
+// TODO: Implement difficulties as Enums of u8 type.
+
 #[derive(PartialEq, Eq)]
 struct Score {
     correct: u32,
@@ -244,6 +246,7 @@ fn play_time(game: &Game) -> Option<Score> {
     //     words_queued += 1;
     // }
 
+    // Difficulty increases over time.
     // difficulty = match words_queued {
     //     0..=20 => 1,
     //     21..=40 => 2,
@@ -358,6 +361,132 @@ fn play_endless(game: &Game) -> Option<Score> {
         errors,
         time: None,
     })
+}
+
+fn play_racer(game: &Game) -> Option<Score> {
+    count_down(3, &game.mode);
+
+    let mut words_done: u32 = 0;
+    let mut errors: u32 = 0;
+    let mut rng = thread_rng();
+    let mut bytes;
+    let mut quit = false;
+
+    let word_count: Option<u32>;
+    let low: u32;
+    let high: u32;
+    if let Some(count_options) = &game.count {
+        word_count = Some(count_options[0]);
+        match count_options.len() {
+            1 => {
+                low = 1;
+                high = 4;
+            }
+            2 => {
+                low = count_options[1];
+                high = low;
+            }
+            3 => {
+                low = count_options[1];
+                high = count_options[2];
+            }
+            _ => unreachable!(),
+        }
+    } else {
+        word_count = None;
+        low = 1;
+        high = 4;
+    }
+
+    let mut difficulty: u32 = low; // initialize queue with lowest difficulty word.
+    let mut words: VecDeque<String> = VecDeque::new();
+    if game.options.multiple {
+        for _i in 0..9 {
+            // queue up nine words, so the tenth is added in the loop.
+            let word: String = game.word_sets.get(&difficulty)?.choose(&mut rng)?.clone();
+            difficulty = match game.mode {
+                Mode::Race => ((word.len() as u32) % (high - low + 1)) + low,
+                Mode::Endless => (word.len() as u32 % 4) + 1,
+                Mode::TimeAttack => 10, // TODO: Implement this difficulty
+            };
+            words.push_back(word);
+        }
+    } else {
+        let word: String = game.word_sets.get(&low)?.choose(&mut rng)?.clone();
+        words.push_back(word);
+    }
+
+    let Some(now) = if game.mode == Mode::Race {
+        Some(Instant::now())
+    } else {
+        None
+    };
+    while !quit {
+        let cur = words.pop_front()?.clone();
+        difficulty = match game.mode {
+            Mode::Race => ((cur.len() as u32) % (high - low + 1)) + low,
+            Mode::Endless => cur.len() as u32 % 4 + 1,
+            Mode::TimeAttack => 1, // TODO: Implement this difficulty
+        };
+        let word: String = game
+            .word_sets
+            .get(&(difficulty as u32))?
+            .choose(&mut rng)?
+            .clone();
+        words.push_back(word);
+
+        let mut input = String::new();
+        while !quit {
+            println!("\x1b[2J\x1b[1;1H{} | {}", words_done, errors);
+            if game.options.multiple {
+                let mut witer = words.iter();
+                println!(
+                    "\n{} {} {} {} {} {} {} {} {}",
+                    cur,
+                    witer.next()?,
+                    witer.next()?,
+                    witer.next()?,
+                    witer.next()?,
+                    witer.next()?,
+                    witer.next()?,
+                    witer.next()?,
+                    witer.next()?
+                );
+            } else {
+                println!("\n{}", cur);
+            }
+            input.clear();
+            bytes = io::stdin().lock().read_line(&mut input).unwrap_or_default();
+            println!("{}", input);
+            if bytes == 0 || input.contains("\t") {
+                quit = true;
+                break;
+            }
+            if input.trim_end() == "" {
+                continue;
+            }
+
+            if input.trim_end() == cur {
+                words_done += 1;
+                break;
+            } else {
+                errors += 1;
+                match game.options.skip_err {
+                    true => break,
+                    false => continue,
+                }
+            }
+        }
+    }
+    if game.mode == Mode::Race && words_done != word_count {
+        None
+    } else {
+        Some(Score {
+            correct: words_done,
+            errors,
+            time: Some(now.elapsed()),
+        })
+    }
 }
 
 // will write your time and WPM/CPM to a file.
