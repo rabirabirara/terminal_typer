@@ -11,3 +11,5 @@ Mode: Endless      : Correct: 3     | Errors: 0
 Mode: Race       :  Correct: 20    |  Errors: 0     | Time: 19.8
 Mode: Race       :  Correct: 20    |  Errors: 0     | Time: 24.230576
 Mode: Endless    :  Correct: 15    |  Errors: 0   
+Mode: Race       :  Correct: 20    |  Errors: 0    | Time: 27.580486
+Mode: Endless    :  Correct: 22    |  Errors: 0   

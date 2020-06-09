@@ -219,7 +219,7 @@ fn play(game: &Game) -> Option<Score> {
     // TODO: change mode selection to ingame prompt.
     return match game.mode {
         Mode::TimeAttack => play_time(game),
-        _ => play_two(game),
+        _ => play_race_endless(game),
     };
 }
 
@@ -273,7 +273,7 @@ fn play_time(game: &Game) -> Option<Score> {
     Some(temp)
 }
 
-fn play_two(game: &Game) -> Option<Score> {
+fn play_race_endless(game: &Game) -> Option<Score> {
     count_down(3, &game.mode);
 
     let mut words_done: u32 = 0;
@@ -302,7 +302,7 @@ fn play_two(game: &Game) -> Option<Score> {
                 low = count_options[1];
                 high = count_options[2];
             }
-            _ => unreachable!(),
+            _ => unreachable!(),    // Unreachable: vetted out by CLAP parsing
         }
     } else {
         word_count = 0;
@@ -320,7 +320,7 @@ fn play_two(game: &Game) -> Option<Score> {
             difficulty = match game.mode {
                 Mode::Race => ((word.len() as u32) % (high - low + 1)) + low,
                 Mode::Endless => (word.len() as u32 % 4) + 1,
-                Mode::TimeAttack => 10, // TODO: Implement this difficulty
+                _ => unreachable!()     // Unreachable because only called for above two modes
             };
             words.push_back(word);
         }
@@ -342,7 +342,7 @@ fn play_two(game: &Game) -> Option<Score> {
         difficulty = match game.mode {
             Mode::Race => ((cur.len() as u32) % (high - low + 1)) + low,
             Mode::Endless => cur.len() as u32 % 4 + 1,
-            Mode::TimeAttack => 1, // TODO: Implement this difficulty
+            _ => unreachable!(),    // Unreachable because only called for above two modes
         };
         let word: String = game
             .word_sets
@@ -451,6 +451,7 @@ fn write_score(scores: &Score, mode: &Mode) -> Result<(), std::io::Error> {
             time = "N/A".to_string();
         }
         write!(&mut scores_file, " | Time: {}", time)?;
+        // TODO: Implement listing difficulty of Race
     }
     Ok(())
 }
