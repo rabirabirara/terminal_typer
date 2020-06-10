@@ -229,14 +229,6 @@ fn play(game: &Game) -> Option<Score> {
 // Score is based on how many words you get correct before crashing.
 // Since losing this mode occurs on time out, skip-err is not allowed.
 // Can choose to reset timer (more score at higher diffs), or can accumulate time.
-
-// skip errors: resets timers.  lowers score.
-
-// average typing speed would be 4/4.5 CPS. (48 WPM)
-// good typing speed would be 5.5/6 CPS.    (72 WPM)
-// considerable typing speed would be 7.5/8 CPS.    (96 WPM)
-// fastest typing speed would be 9 CPS.     (108 WPM, just above my max speed. only triggered after a lot of words.)
-// Need to count characters per minute.
 // TODO: Implement concurrent timer which interrupts player when time is up.  Eventually implement timer.
 fn play_time(game: &Game) -> Option<Score> {
     count_down(3, &game.mode);
@@ -266,6 +258,7 @@ fn play_time(game: &Game) -> Option<Score> {
     let mut time_difficulty: f32;
     let mut time_passed: f32 = 0.;
     let mut time_total = 0.;
+    let mut time_accumulated: f32 = 0.;
     while !quit {
         let time_start = Instant::now();
         let cur = words.pop_front()?.clone();
@@ -282,6 +275,7 @@ fn play_time(game: &Game) -> Option<Score> {
             3 => 6.,
             _ => 5.,
         };
+        time_difficulty += time_accumulated;
         let word: String = game
             .word_sets
             .get(&(difficulty as u32))?
@@ -334,6 +328,9 @@ fn play_time(game: &Game) -> Option<Score> {
                     .as_secs_f32();
                 if time_passed >= time_difficulty {
                     quit = true;
+                }
+                if game.options.accumulate {
+                    time_accumulated += 1.;
                 }
                 time_total += time_passed;
                 break;
@@ -477,29 +474,37 @@ fn play_race_or_endless(game: &Game) -> Option<Score> {
             }
         }
     }
-    if game.mode == Mode::Race {
-        if check && words_done != word_count {
-            None
-        } else {
-            Some(Score {
-                correct: words_done,
-                errors,
-                time: Some(now?.elapsed()),
-                wpm: None,
-            })
+
+    match game.mode {
+        Mode::Race => {
+            if check && words_done != word_count {
+                None
+            } else {
+                Some(Score {
+                    correct: words_done,
+                    errors,
+                    time: Some(now?.elapsed()),
+                    wpm: None,
+                })
+            }
         }
-    } else {
-        Some(Score {
-            correct: words_done,
-            errors,
-            time: None,
-            wpm: None,
-        })
+        _ => {
+            if words_done == 0 {
+                None
+            } else {
+                Some(Score {
+                    correct: words_done,
+                    errors,
+                    time: None,
+                    wpm: None,
+                })
+            }
+        }
     }
 }
 
 // Print score and write it to scores.txt.
-fn give_score(scores: &Score, mode: &Mode) -> Result<(), std::io::Error> {
+fn give_score(scores: &Score, mode: &Mode) -> io::Result<()> {
     write_score(scores, mode)?;
     println!("\x1b[2J\x1b[1;1HGood game! Your score:");
     print!("Correct: {} | Errors: {}", scores.correct, scores.errors);
@@ -512,7 +517,7 @@ fn give_score(scores: &Score, mode: &Mode) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-fn write_score(scores: &Score, mode: &Mode) -> Result<(), std::io::Error> {
+fn write_score(scores: &Score, mode: &Mode) -> io::Result<()> {
     let scores_path = Path::new("scores.txt");
     let mut scores_file = OpenOptions::new()
         .append(true)
@@ -536,13 +541,20 @@ fn write_score(scores: &Score, mode: &Mode) -> Result<(), std::io::Error> {
                 write!(&mut scores_file, " | Time: N/A")?;
             }
         }
-        Mode::TimeAttack => {}
+        Mode::TimeAttack => {
+            if let Some(wpm) = scores.wpm {
+                write!(&mut scores_file, " | Approx. WPM: {}", wpm)?;
+            } else {
+                write!(&mut scores_file, " | Approx. WPM: N/A")?;
+            }
+        }
         _ => (),
     }
+
     Ok(())
 }
 
-fn main() -> std::io::Result<()> {
+fn main() -> io::Result<()> {
     let matches = App::new(PROG_NAME)
         .author(PROG_AUTHOR)
         .version(PROG_VERSION)
@@ -606,7 +618,7 @@ fn main() -> std::io::Result<()> {
                 .long("multiple")
                 .about("When enabled, higher difficulties display multiple words. Recommended."),
         )
-        .arg(   // Lower score.
+        .arg(   // TODO: Implement char by char checking.
             Arg::with_name("classic")
                 .short('c')
                 .long("classic")
