@@ -22,7 +22,6 @@ use strum_macros::AsRefStr;
 
 // Note: do not retrim String variables that come from the file - trim input!
 
-// TODO: implement custom difficulty range
 // implement getchar() style for "classic" argument
 const PROG_NAME: &'static str = env!("CARGO_PKG_NAME");
 const PROG_AUTHOR: &'static str = env!("CARGO_PKG_AUTHORS");
@@ -68,18 +67,15 @@ struct Game {
     count: Option<Vec<u32>>, // for race
 }
 
-fn read_file(filename: &str) -> Vec<String> {
+fn read_file(filename: &str) -> Result<Vec<String>, std::io::Error> {
     let file_path = Path::new(filename);
-    let file_object = OpenOptions::new()
-        .read(true)
-        .open(file_path)
-        .expect("Expect: valid file at file path. Fail to: open file with path!");
+    let file_object = OpenOptions::new().read(true).open(file_path)?;
     let file_buffer = BufReader::new(file_object);
     let words: Vec<String> = file_buffer
         .lines()
         .map(|l| l.unwrap().trim().to_string())
         .collect();
-    words
+    Ok(words)
 }
 
 fn parse_to_sets(words: Vec<String>) -> HashMap<u32, Vec<String>> {
@@ -234,24 +230,102 @@ fn play(game: &Game) -> Option<Score> {
 // good typing speed would be 5.5/6 CPS.    (72 WPM)
 // considerable typing speed would be 7.5/8 CPS.    (96 WPM)
 // fastest typing speed would be 9 CPS.     (108 WPM, just above my max speed. only triggered after a lot of words.)
+// Need to count characters per minute.
+// TODO: Implement concurrent timer which interrupts player when time is up.  Eventually implement timer.
 fn play_time(game: &Game) -> Option<Score> {
     count_down(3, &game.mode);
 
-    // if game.options.multiple {
-    // for _i in 0..9 {
-    //     // queue up nine words, so the tenth is added in the loop.
-    //     let word: String = game.word_sets.get(&difficulty)?.choose(&mut rng)?.clone();
-    //     words.push_back(word);
-    //     words_queued += 1;
-    // }
+    let mut words_done: u32 = 0;
+    let mut chars_typed: u32 = 0;
+    let mut words_queued: u32 = 0;
+    let mut errors: u32 = 0;
+    let mut rng = thread_rng();
+    let mut bytes;
+    let mut quit = false;
 
-    // Difficulty increases over time.
-    // difficulty = match words_queued {
-    //     0..=20 => 1,
-    //     21..=40 => 2,
-    //     41..=60 => 3,
-    //     _ => 4,
-    // };
+    let mut difficulty: u32 = 1; // initialize queue with lowest difficulty word.
+    let mut words: VecDeque<String> = VecDeque::new();
+    if game.options.multiple {
+        for _i in 0..9 {
+            let word: String = game.word_sets.get(&difficulty)?.choose(&mut rng)?.clone();
+            words_queued += 1;
+            words.push_back(word);
+        }
+    } else {
+        let word: String = game.word_sets.get(&difficulty)?.choose(&mut rng)?.clone();
+        words_queued += 1;
+        words.push_back(word);
+    }
+
+    let mut time_difficulty: f32;
+    while !quit {
+        let time_start = Instant::now();
+        let cur = words.pop_front()?.clone();
+        // Difficulty is based on words_queued for consistency with stages.  It just makes sense.
+        difficulty = match words_queued {
+            0..=20 => 1,
+            21..=40 => 2,
+            41..=60 => 3,
+            _ => 4,
+        };
+        time_difficulty = match difficulty {
+            1 => 10.,
+            2 => 8.,
+            3 => 6.,
+            _ => 5.,
+        };
+        let word: String = game
+            .word_sets
+            .get(&(difficulty as u32))?
+            .choose(&mut rng)?
+            .clone();
+        words_queued += 1;
+        words.push_back(word);
+
+        let mut input = String::new();
+        while !quit {
+            let time_left = Instant::now().saturating_duration_since(time_start).as_secs_f32();
+            println!("\x1b[2J\x1b[1;1H{} | {} | {:?}", words_done, errors, time_difficulty - time_left);
+            if game.options.multiple {
+                let mut witer = words.iter();
+                println!(
+                    "\n{} {} {} {} {} {} {} {} {}",
+                    cur,
+                    witer.next()?,
+                    witer.next()?,
+                    witer.next()?,
+                    witer.next()?,
+                    witer.next()?,
+                    witer.next()?,
+                    witer.next()?,
+                    witer.next()?
+                );
+            } else {
+                println!("\n{}", cur);
+            }
+            input.clear();
+            bytes = io::stdin().lock().read_line(&mut input).unwrap_or_default();
+            println!("{}", input);
+            if bytes == 0 || input.contains("\t") {
+                quit = true;
+                break;
+            }
+            if input.trim_end() == "" {
+                continue;
+            }
+
+            if input.trim_end() == cur {
+                words_done += 1;
+                break;
+            } else {
+                errors += 1;
+                match game.options.skip_err {
+                    true => break,
+                    false => continue,
+                }
+            }
+        }
+    }
 
     // if input.trim_end() == cur {
     //     words_done += 1;
@@ -265,12 +339,7 @@ fn play_time(game: &Game) -> Option<Score> {
     //     }
     // }
 
-    let temp = Score {
-        correct: 0,
-        errors: 0,
-        time: None,
-    };
-    Some(temp)
+    None
 }
 
 fn play_race_or_endless(game: &Game) -> Option<Score> {
@@ -511,13 +580,14 @@ fn main() -> std::io::Result<()> {
             Arg::with_name("skip-errors")
                 .short('s')
                 .long("skip-errors")
+                .conflicts_with("time-attack")
                 .about("When enabled, skips past errors and counts them to display at game over."),
         )
         .arg(   // allows you to see multiple words at once, so you can look ahead.
             Arg::with_name("multiple")
                 .short('m')
                 .long("multiple")
-                .about("When enabled, higher difficulties display multiple words. Recommended with --accumulate."),
+                .about("When enabled, higher difficulties display multiple words. Recommended."),
         )
         .arg(   // Lower score.
             Arg::with_name("classic")
@@ -534,7 +604,8 @@ fn main() -> std::io::Result<()> {
         )
         .get_matches();
 
-    let words = read_file(matches.value_of("input-file").unwrap());
+    // .unwrap() is acceptable for this purpose because CLAP requires the argument input-file.
+    let words = read_file(matches.value_of("input-file").unwrap())?;
     let word_sets = parse_to_sets(words);
     let options = options(&matches);
     let mode = if matches.is_present("time-attack") {
@@ -669,4 +740,11 @@ put something in the vector at first, anything is fine.
 
 5/27
 -Added better formatting to scores.txt.
+
+6/10
+Made big git changes, and merged play_race and play_endless.
+I am still looking into timers, how to make the temrinal print a timer without disturbing the rest of output.
+I may have to look into concurrency.
+
+-Replaced work in read_file with better error handling.  It feels like I am learning to write better code!
 */
