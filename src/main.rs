@@ -41,6 +41,7 @@ struct Score {
     correct: u32,
     errors: u32,
     time: Option<Duration>, // for race
+    wpm: Option<u32>,
 }
 
 impl Score {
@@ -49,6 +50,7 @@ impl Score {
             correct: 0,
             errors: 0,
             time: None,
+            wpm: None,
         }
     }
 }
@@ -235,9 +237,9 @@ fn play(game: &Game) -> Option<Score> {
 fn play_time(game: &Game) -> Option<Score> {
     count_down(3, &game.mode);
 
-    let mut words_done: u32 = 0;
-    let mut chars_typed: u32 = 0;
-    let mut words_queued: u32 = 0;
+    let mut words_done: u32 = 0;        // used to measure score
+    let mut chars_typed: usize = 0;       // used to measure characters per minute
+    let mut words_queued: u32 = 0;      // used to measure difficulties
     let mut errors: u32 = 0;
     let mut rng = thread_rng();
     let mut bytes;
@@ -257,7 +259,8 @@ fn play_time(game: &Game) -> Option<Score> {
         words.push_back(word);
     }
 
-    let mut time_difficulty: f32;
+    let mut time_difficulty: f32 = 10.;
+    let mut time_passed: f32 = 0.;
     while !quit {
         let time_start = Instant::now();
         let cur = words.pop_front()?.clone();
@@ -284,8 +287,7 @@ fn play_time(game: &Game) -> Option<Score> {
 
         let mut input = String::new();
         while !quit {
-            let time_left = Instant::now().saturating_duration_since(time_start).as_secs_f32();
-            println!("\x1b[2J\x1b[1;1H{} | {} | {:?}", words_done, errors, time_difficulty - time_left);
+            println!("\x1b[2J\x1b[1;1H{} | {} | {:.2}", words_done, errors, time_difficulty - time_passed);
             if game.options.multiple {
                 let mut witer = words.iter();
                 println!(
@@ -316,28 +318,18 @@ fn play_time(game: &Game) -> Option<Score> {
 
             if input.trim_end() == cur {
                 words_done += 1;
+                chars_typed += cur.len();
+                time_passed = Instant::now().saturating_duration_since(time_start).as_secs_f32();
+                if time_passed>= time_difficulty {
+                    quit = true;
+                }
                 break;
             } else {
                 errors += 1;
-                match game.options.skip_err {
-                    true => break,
-                    false => continue,
-                }
             }
         }
     }
 
-    // if input.trim_end() == cur {
-    //     words_done += 1;
-    //     words_queued += 1;
-    //     break;
-    // } else {
-    //     errors += 1;
-    //     match game.options.skip_err {
-    //         true => break,
-    //         false => continue,
-    //     }
-    // }
 
     None
 }
@@ -474,6 +466,7 @@ fn play_race_or_endless(game: &Game) -> Option<Score> {
                 correct: words_done,
                 errors,
                 time: Some(now?.elapsed()),
+                wpm: None,
             })
         }
     } else {
@@ -481,6 +474,7 @@ fn play_race_or_endless(game: &Game) -> Option<Score> {
             correct: words_done,
             errors,
             time: None,
+            wpm: None,
         })
     }
 }
@@ -492,7 +486,10 @@ fn give_score(scores: &Score, mode: &Mode) -> Result<(), std::io::Error> {
     print!("Correct: {} | Errors: {}", scores.correct, scores.errors);
     if let Some(time) = scores.time {
         println!(" | Race time: {}", time.as_secs_f32().to_string());
+    } else if let Some(wpm) = scores.wpm {
+        println!(" | Approx. WPM: {}", wpm);
     }
+
     Ok(())
 }
 
@@ -512,15 +509,18 @@ fn write_score(scores: &Score, mode: &Mode) -> Result<(), std::io::Error> {
         scores.errors
     )?;
 
-    if *mode == Mode::Race {
-        let time;
-        if let Some(duration) = scores.time {
-            time = duration.as_secs_f32().to_string();
-        } else {
-            time = "N/A".to_string();
-        }
-        write!(&mut scores_file, " | Time: {}", time)?;
-        // TODO: Implement listing difficulty of Race
+    match *mode {
+        Mode::Race => {
+            if let Some(duration) = scores.time {
+                write!(&mut scores_file, " | Time: {:.2}", duration.as_secs_f32())?;
+            } else {
+                write!(&mut scores_file, " | Time: N/A")?;
+            }
+        },
+        Mode::TimeAttack => {
+
+        },
+        _ => ()
     }
     Ok(())
 }
