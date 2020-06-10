@@ -177,6 +177,10 @@ fn count_down(secs: u32, mode: &Mode) {
     }
 }
 
+fn calculate_wpm(chars_typed: usize, time_total: f32) -> u32 {
+    12 * chars_typed as u32 / time_total.round() as u32
+}
+
 // fn options(matches: &ArgMatches) -> HashMap<String, bool> {
 //     let mut options: HashMap<String, bool> = HashMap::new();
 
@@ -237,9 +241,9 @@ fn play(game: &Game) -> Option<Score> {
 fn play_time(game: &Game) -> Option<Score> {
     count_down(3, &game.mode);
 
-    let mut words_done: u32 = 0;        // used to measure score
-    let mut chars_typed: usize = 0;       // used to measure characters per minute
-    let mut words_queued: u32 = 0;      // used to measure difficulties
+    let mut words_done: u32 = 0; // used to measure score
+    let mut chars_typed: usize = 0; // used to measure characters per minute
+    let mut words_queued: u32 = 0; // used to measure difficulties
     let mut errors: u32 = 0;
     let mut rng = thread_rng();
     let mut bytes;
@@ -259,8 +263,9 @@ fn play_time(game: &Game) -> Option<Score> {
         words.push_back(word);
     }
 
-    let mut time_difficulty: f32 = 10.;
+    let mut time_difficulty: f32;
     let mut time_passed: f32 = 0.;
+    let mut time_total = 0.;
     while !quit {
         let time_start = Instant::now();
         let cur = words.pop_front()?.clone();
@@ -287,7 +292,12 @@ fn play_time(game: &Game) -> Option<Score> {
 
         let mut input = String::new();
         while !quit {
-            println!("\x1b[2J\x1b[1;1H{} | {} | {:.2}", words_done, errors, time_difficulty - time_passed);
+            println!(
+                "\x1b[2J\x1b[1;1H{} | {} | {:.2}",
+                words_done,
+                errors,
+                time_difficulty - time_passed
+            );
             if game.options.multiple {
                 let mut witer = words.iter();
                 println!(
@@ -319,19 +329,29 @@ fn play_time(game: &Game) -> Option<Score> {
             if input.trim_end() == cur {
                 words_done += 1;
                 chars_typed += cur.len();
-                time_passed = Instant::now().saturating_duration_since(time_start).as_secs_f32();
-                if time_passed>= time_difficulty {
+                time_passed = Instant::now()
+                    .saturating_duration_since(time_start)
+                    .as_secs_f32();
+                if time_passed >= time_difficulty {
                     quit = true;
                 }
+                time_total += time_passed;
                 break;
             } else {
                 errors += 1;
             }
         }
     }
-
-
-    None
+    if words_done > 0 {
+        Some(Score {
+            correct: words_done,
+            errors,
+            time: None,
+            wpm: Some(calculate_wpm(chars_typed, time_total)),
+        })
+    } else {
+        None
+    }
 }
 
 fn play_race_or_endless(game: &Game) -> Option<Score> {
@@ -363,7 +383,7 @@ fn play_race_or_endless(game: &Game) -> Option<Score> {
                 low = count_options[1];
                 high = count_options[2];
             }
-            _ => unreachable!(),    // Unreachable: vetted out by CLAP parsing
+            _ => unreachable!(), // Unreachable: vetted out by CLAP parsing
         }
     } else {
         word_count = 0;
@@ -381,7 +401,7 @@ fn play_race_or_endless(game: &Game) -> Option<Score> {
             difficulty = match game.mode {
                 Mode::Race => ((word.len() as u32) % (high - low + 1)) + low,
                 Mode::Endless => (word.len() as u32 % 4) + 1,
-                _ => unreachable!()     // Unreachable because only called for above two modes
+                _ => unreachable!(), // Unreachable because only called for above two modes
             };
             words.push_back(word);
         }
@@ -389,7 +409,6 @@ fn play_race_or_endless(game: &Game) -> Option<Score> {
         let word: String = game.word_sets.get(&low)?.choose(&mut rng)?.clone();
         words.push_back(word);
     }
-
 
     let now: Option<Instant>;
     if game.mode == Mode::Race {
@@ -403,7 +422,7 @@ fn play_race_or_endless(game: &Game) -> Option<Score> {
         difficulty = match game.mode {
             Mode::Race => ((cur.len() as u32) % (high - low + 1)) + low,
             Mode::Endless => cur.len() as u32 % 4 + 1,
-            _ => unreachable!(),    // Unreachable because only called for above two modes
+            _ => unreachable!(), // Unreachable because only called for above two modes
         };
         let word: String = game
             .word_sets
@@ -516,11 +535,9 @@ fn write_score(scores: &Score, mode: &Mode) -> Result<(), std::io::Error> {
             } else {
                 write!(&mut scores_file, " | Time: N/A")?;
             }
-        },
-        Mode::TimeAttack => {
-
-        },
-        _ => ()
+        }
+        Mode::TimeAttack => {}
+        _ => (),
     }
     Ok(())
 }
