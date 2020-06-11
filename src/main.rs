@@ -9,7 +9,15 @@ use std::path::Path; // for parsing command line arguments
 use std::time::{Duration, Instant}; // Instant used in time attack
 use strum_macros::AsRefStr;
 
-// I could make writing this into a Rust tutorial.
+/* I could make writing this into a Rust tutorial.
+-Covers dependencies
+    : file read/write
+    : time-related work
+    : using command-line-argument-parser
+-Derive on structs, implicitly Traits
+-Declarative programming in rust
+
+*/
 
 // score: how many words typed correctly, in how much time
 // reduced by errors - one for error skip, or one for each error
@@ -83,80 +91,38 @@ fn read_file(filename: &str) -> Result<Vec<String>, std::io::Error> {
 fn parse_to_sets(words: Vec<String>) -> HashMap<u32, Vec<String>> {
     // Don't need to trim() the Strings because they've been trimmed in read_file().
     // Ultimately this long branch is more readable than using a for loop, imo.
-    let three: Vec<String> = words
-        .iter()
-        .cloned()
-        .filter(|word| word.len() == 3)
-        .collect();
-    let four: Vec<String> = words
-        .iter()
-        .cloned()
-        .filter(|word| word.len() == 4)
-        .collect();
-    let five: Vec<String> = words
-        .iter()
-        .cloned()
-        .filter(|word| word.len() == 5)
-        .collect();
-    let six: Vec<String> = words
-        .iter()
-        .cloned()
-        .filter(|word| word.len() == 6)
-        .collect();
-    let seven: Vec<String> = words
-        .iter()
-        .cloned()
-        .filter(|word| word.len() == 7)
-        .collect();
-    let eight: Vec<String> = words
-        .iter()
-        .cloned()
-        .filter(|word| word.len() == 8)
-        .collect();
-    let nine: Vec<String> = words
-        .iter()
-        .cloned()
-        .filter(|word| word.len() == 9)
-        .collect();
-    let ten: Vec<String> = words
-        .iter()
-        .cloned()
-        .filter(|word| word.len() == 10)
-        .collect();
-    let eleven: Vec<String> = words
-        .iter()
-        .cloned()
-        .filter(|word| word.len() == 11)
-        .collect();
-    let twelve: Vec<String> = words
+    // (That, and trying the for loop with a vector of vectors gave me problems with references.)
+
+    let mut word_sets: HashMap<u32, Vec<String>> = HashMap::new();
+
+    for (ch, i) in (3usize..=11usize).collect::<Vec<usize>>().chunks(3).into_iter().zip((1..=3).into_iter()) {
+        let three = words
+            .iter()
+            .filter(|word| word.len() == ch[0])
+            .cloned()
+            .into_iter()
+        .chain(words
+            .iter()
+            .filter(|word| word.len() == ch[1])
+            .cloned()
+            .into_iter()
+        ).chain(words
+            .iter()
+            .filter(|word| word.len() == ch[2])
+            .cloned()
+            .into_iter()
+        );
+        let set: Vec<String> = three.collect();
+        word_sets.insert(i, set);
+    }
+    
+    
+    let long: Vec<String> = words
         .iter()
         .cloned()
         .filter(|word| word.len() >= 12)
         .collect();
-
-    let first: Vec<String> = three
-        .into_iter()
-        .chain(four.into_iter())
-        .chain(five.into_iter())
-        .collect();
-    let second: Vec<String> = six
-        .into_iter()
-        .chain(seven.into_iter())
-        .chain(eight.into_iter())
-        .collect();
-    let third: Vec<String> = nine
-        .into_iter()
-        .chain(ten.into_iter())
-        .chain(eleven.into_iter())
-        .collect();
-    let fourth: Vec<String> = twelve;
-
-    let mut word_sets: HashMap<u32, Vec<String>> = HashMap::new();
-
-    word_sets.insert(1, first);
-    word_sets.insert(2, second);
-    word_sets.insert(3, third);
-    word_sets.insert(4, fourth);
+    word_sets.insert(4, long);
 
     word_sets
 }
@@ -593,8 +559,8 @@ fn main() -> io::Result<()> {
                             _ => return Err(String::from("Failed to parse arguments for Race. Please give u32 integers instead."))
                         }
                     }
-                    if args.len() == 3 && !(args[2] > args[1]) {
-                        return Err(String::from("Second argument for range must be larger than first."));
+                    if args.len() == 3 && args[2] < args[1] {
+                        return Err(String::from("The second argument for range must be greater than or equal to the first."));
                     }
                     Ok(())
                 })
@@ -644,6 +610,7 @@ fn main() -> io::Result<()> {
     } else if matches.is_present("race") {
         Mode::Race
     } else {
+        // I like the explicitness of seeing all match arms like this, hence the unreachable!().
         unreachable!();
     };
     // count better be a Some() after all that bullshit I did up above.
@@ -652,7 +619,7 @@ fn main() -> io::Result<()> {
             matches
                 .values_of("race")
                 .expect("Expected valid &str input as argument to --race, preliminary.")
-                .map(|value| value.trim().parse::<u32>().unwrap())
+                .filter_map(|value| value.trim().parse::<u32>().ok())
                 .collect::<Vec<u32>>(),
         )
     } else {
@@ -776,4 +743,23 @@ I am still looking into timers, how to make the temrinal print a timer without d
 I may have to look into concurrency.
 
 -Replaced work in read_file with better error handling.  It feels like I am learning to write better code!
+
+-Fully fleshed out play_time, adding better timing, wpm calculation, and accumulate.
+
+-Finally! I got to use filter_map in main.
+
+-I attempted to clean parse sets and refactor it into a for loop.
+let mut nine_sets: Vec<Vec<String>> = Vec::new();
+for i in 0..=8 {
+    nine_sets[i] = words
+        .iter()
+        .cloned()
+        .filter(|word| word.len() == (i + 3))
+        .collect();
+}
+... but this gave me reference problems.  I couldn't convert any of the indexes of nine_sets into an iterator (by move).
+If I used .iter(), then I would have references to Strings.  I didn't want to copy them all over.
+-I try again, this time using chunks().  I also notice that the order in which I was cloning the iterators in parse_sets
+was inefficient - I was cloning the entire iterator for words, rather than just the filtered part!  I don't know if there
+was a difference, however.
 */
