@@ -470,8 +470,8 @@ fn play_race_or_endless(game: &Game) -> Option<Score> {
 }
 
 // Print score and write it to scores.txt.
-fn give_score(scores: &Score, mode: &Mode) -> io::Result<()> {
-    write_score(scores, mode)?;
+fn give_score(scores: &Score, mode: &Mode, options: &Modifiers) -> io::Result<()> {
+    write_score(scores, mode, options)?;
     println!("\x1b[2J\x1b[1;1HGood game! Your score:");
     print!("Correct: {} | Errors: {}", scores.correct, scores.errors);
     if let Some(time) = scores.time {
@@ -483,7 +483,7 @@ fn give_score(scores: &Score, mode: &Mode) -> io::Result<()> {
     Ok(())
 }
 
-fn write_score(scores: &Score, mode: &Mode) -> io::Result<()> {
+fn write_score(scores: &Score, mode: &Mode, options: &Modifiers) -> io::Result<()> {
     let scores_path = Path::new("scores.txt");
     let mut scores_file = OpenOptions::new()
         .append(true)
@@ -491,10 +491,16 @@ fn write_score(scores: &Score, mode: &Mode) -> io::Result<()> {
         .open(scores_path)
         .expect("Expected valid path creation from \"scores.txt\".");
 
+    let mode_string = if options.accumulate {
+        mode.as_ref().to_owned() + " -a"
+    } else {
+        mode.as_ref().to_owned()
+    };
+
     write!(
         &mut scores_file,
-        "\nMode: {:<10} :  Correct: {:<5} |  Errors: {:<4}",
-        mode.as_ref(),
+        "\nMode: {:<12}  :  Correct: {:<5} |  Errors: {:<5}",
+        mode_string,
         scores.correct,
         scores.errors
     )?;
@@ -502,16 +508,16 @@ fn write_score(scores: &Score, mode: &Mode) -> io::Result<()> {
     match *mode {
         Mode::Race => {
             if let Some(duration) = scores.time {
-                write!(&mut scores_file, " | Time: {:.2}", duration.as_secs_f32())?;
+                write!(&mut scores_file, "  |  Time: {:.2}", duration.as_secs_f32())?;
             } else {
-                write!(&mut scores_file, " | Time: N/A")?;
+                write!(&mut scores_file, "  |  Time: N/A")?;
             }
         }
         Mode::TimeAttack => {
             if let Some(wpm) = scores.wpm {
-                write!(&mut scores_file, " | Approx. WPM: {}", wpm)?;
+                write!(&mut scores_file, "  |  Approx. WPM: {}", wpm)?;
             } else {
-                write!(&mut scores_file, " | Approx. WPM: N/A")?;
+                write!(&mut scores_file, "  |  Approx. WPM: N/A")?;
             }
         }
         _ => (),
@@ -635,7 +641,7 @@ fn main() -> io::Result<()> {
 
     let scores = play(&game).unwrap_or(Score::default());
     if scores != Score::default() {
-        match give_score(&scores, &game.mode) {
+        match give_score(&scores, &game.mode, &game.options) {
             Ok(()) => println!("\nYour score has been recorded.  Thanks for playing!"),
             Err(error) => println!("Your score was not recorded.  Error: {:?}", error),
         }
@@ -762,4 +768,8 @@ If I used .iter(), then I would have references to Strings.  I didn't want to co
 -I try again, this time using chunks().  I also notice that the order in which I was cloning the iterators in parse_sets
 was inefficient - I was cloning the entire iterator for words, rather than just the filtered part!  I don't know if there
 was a difference, however.
+
+-In write_score, I attempt at implementing some way to show the game options enabled in the mode section.
+This actually marks the first usage of to_owned() - for, to concatenate to a string, you need to own it.
+I tried using format!("{}{}", mode.as_ref(), " -a"), but format!() actually allocates a String.  So I reverted it back.
 */

@@ -1,17 +1,1 @@
-Mode: Endless - Correct: 106 | Errors: 4
-Mode: Endless - Correct: 79 | Errors: 5
-Mode: Race - Correct: 20 | Errors: 0 | Time: 28.58582
-Mode: Race - Correct: 2 | Errors: 0 | Time: 2.8239427
-Mode: Endless - Correct: 1 | Errors: 0
-Mode: Endless - Correct: 64 | Errors: 5
-Mode: Race - Correct: 10 | Errors: 0 | Time: 13.57588
-Mode: Endless    - Correct: 30   | Errors: 0   
-Mode: Endless      - Correct: 22    | Errors: 0    
-Mode: Endless      : Correct: 3     | Errors: 0    
-Mode: Race       :  Correct: 20    |  Errors: 0     | Time: 19.8
-Mode: Race       :  Correct: 20    |  Errors: 0     | Time: 24.230576
-Mode: Endless    :  Correct: 15    |  Errors: 0   
-Mode: Race       :  Correct: 20    |  Errors: 0    | Time: 27.580486
-Mode: Endless    :  Correct: 22    |  Errors: 0   
-Mode: TimeAttack :  Correct: 77    |  Errors: 20  
-Mode: TimeAttack :  Correct: 41    |  Errors: 0   
+Mode: TimeAttack  :  Correct: 32    |  Errors: 0      |  Approx. WPM: 61
