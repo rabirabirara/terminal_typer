@@ -1,0 +1,122 @@
+5/12
+-Discovered more about iterators and about use of cloned().
+iter() iterates over a collection by reference, meaning that if you call a function
+like filter() on an iter() iterator, you'll produce a double reference and every item will have become a reference,
+which cannot be returned outside of the function.
+If you use into_iter(), you don't iterate by reference, but you can't call into_iter() on one collection twice.
+So, use iter().cloned().
+.cloned() is a method which allows simple values to be more or less copied (copied() is a twin sister).
+In the docs, cloned() is described as useful for when you produce an iter over &T, but need T.
+
+-Learned more about opening files using OpenOptions, and returning results in main.
+Can use the ? operator when doing I/O work in main().
+
+-Learned how to use if/let with Some(x) instead of x = ....unwrap().
+-Struggled CONSIDERABLY with the built-in validator() method in clap.
+The method requires a return type of Result<(), String>, a generic and exceedingly specific Result type.  Needless to say,
+I was kind of disappointed it wasn't possible to wrap the value given in the Result.
+I at least learned how to map Result::Err to a different type, using map_err() and a closure.
+I tried in three ways to check for argument validity: one, with logic in main(); two, believing there must have been something, with
+a library function from clap; three, a custom function passed as an argument to that library function.
+
+5/13
+-Just realized the first real, legitimate use for underscore prefixing a variable. It's in the .validator() code.
+-More comfortable using clone() to turn a &value -> value.
+
+-I came across a design decision which is a little troublesome for me.  Which is preferable: a HashMap, or a Vec of tuples?
+If I use the HashMap, I have to use .get().unwrap().clone().  If I use the Vec of tuples, then I can use indexing, or the brackets
+operator - but if so, not only do I erase the names (making it less sastisfying to scale and understand the code, and brittly reliant on
+consistent order of insertion) from data, I also erase the need for tuples at all - because if I use the tuples and use get() on the Vec,
+I will have to use get().unwrap().clone() anyway.  So in the interest of brevity, I have decided to stick with the plain vector method.
+-Follow-up: I actually suddenly come up with the infinitely better idea to use a struct.  I have shot myself already, don't worry.
+
+5/24
+-There was this almost right code, in implementing the multiple option.
+if game.options.multiple {
+    let mut witer = words.iter();
+    println!(
+        "\n{} {} {} {} {} {} {} {} {}",
+        witer.next()?,
+        witer.next()?,//words.get(1)?,
+        witer.next()?,
+        witer.next()?,
+        witer.next()?,
+        witer.next()?,
+        witer.next()?,
+        witer.next()?,
+        cur
+    );
+} else {
+    println!("\n{}", cur);
+}
+What it does, is prints the correct word at the end, and the upcoming word at the front.  In this way, you would see
+the next word, but not the correct one - in order to get the fastest time, you would have to look at the wrong word,
+while typing the correct one from your memory.  Interesting mode, isn't it?  Implement as an option.
+
+-For a bit, I wanted to read until a space was registered, as in "space stops the read instantly."  So I replaced
+the input: String with a Vec<u32> of bytes, and inserted the following code after stdin():
+    bytes = io::stdin().lock().read_until(32, &mut input).unwrap_or_default();
+    let input = String::from_utf8(input).unwrap_or_default();
+But it doesn't work.  What actually happens, is that it reads until space, yes, but still appends everything to
+the buffer.  Space just doesn't work as a line feed character.
+
+-Spent a lot of time thinking about how to read in EOF or ESC as a character.  Realized that PWSH didn't have an easy option
+like Bash did - and in fact, trying it on both shells was useless.  Rust reads until the EOF, then it simply makes another
+call to read_line... it never ends.  Instead, I opted to just use TAB.
+
+-The count of words was implemented for Race, with added possible options for difficulty range.  Had to change
+count to be an Option<Vec<u32>>.
+
+-Ran into problem with unsigned types.  Need difficulty in u8, but input could be parsed as u32 (and only can
+be parsed as u32).  Decided to remove use of u32 as it wasn't required for optimality.
+
+-The rust compiler and rust-analyzer are truly bright products.  unreachable!() actually does what it's supposed to.
+
+-Interesting bit of cyclic dependency here.
+let cur = words.pop_front()?.clone();
+let difficulty = ((cur.len() as u32) % (high - low + 1)) + low;
+
+let word: String = game
+    .word_sets
+    .get(&(difficulty as u32))?
+    .choose(&mut rng)?
+    .clone();
+words.push_back(word);
+
+So, to pop something from the vector and make cur, we need something in the vector.  To put something in the vector,
+we need difficulty.  To make difficulty, we need the length of current...  And so on.  To solve this, just
+put something in the vector at first, anything is fine.
+
+5/27
+-Added better formatting to scores.txt.
+
+6/10
+Made big git changes, and merged play_race and play_endless.
+I am still looking into timers, how to make the temrinal print a timer without disturbing the rest of output.
+I may have to look into concurrency.
+
+-Replaced work in read_file with better error handling.  It feels like I am learning to write better code!
+
+-Fully fleshed out play_time, adding better timing, wpm calculation, and accumulate.
+
+-Finally! I got to use filter_map in main.
+
+-I attempted to clean parse sets and refactor it into a for loop.
+let mut nine_sets: Vec<Vec<String>> = Vec::new();
+for i in 0..=8 {
+    nine_sets[i] = words
+        .iter()
+        .cloned()
+        .filter(|word| word.len() == (i + 3))
+        .collect();
+}
+... but this gave me reference problems.  I couldn't convert any of the indexes of nine_sets into an iterator (by move).
+If I used .iter(), then I would have references to Strings.  I didn't want to copy them all over.
+-I try again, this time using chunks().  I also notice that the order in which I was cloning the iterators in parse_sets
+was inefficient - I was cloning the entire iterator for words, rather than just the filtered part!  I don't know if there
+was a difference, however.
+
+-In write_score, I attempt at implementing some way to show the game options enabled in the mode section.
+This actually marks the first usage of to_owned() - for, to concatenate to a string, you need to own it.
+I tried using format!("{}{}", mode.as_ref(), " -a"), but format!() actually allocates a String.  So I reverted it back.
+
