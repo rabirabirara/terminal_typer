@@ -28,8 +28,6 @@ use strum_macros::AsRefStr;
 // continue on error, or halt until getting it right.
 // count errors up.
 
-// Note: do not retrim String variables that come from the file - trim input!
-
 // implement getchar() style for "classic" argument
 const PROG_NAME: &'static str = env!("CARGO_PKG_NAME");
 const PROG_AUTHOR: &'static str = env!("CARGO_PKG_AUTHORS");
@@ -94,28 +92,35 @@ fn parse_to_sets(words: Vec<String>) -> HashMap<u32, Vec<String>> {
 
     let mut word_sets: HashMap<u32, Vec<String>> = HashMap::new();
 
-    for (ch, i) in (3usize..=11usize).collect::<Vec<usize>>().chunks(3).into_iter().zip((1..=3).into_iter()) {
+    for (ch, i) in (3usize..=11usize)
+        .collect::<Vec<usize>>()
+        .chunks(3)
+        .into_iter()
+        .zip((1..=3).into_iter())
+    {
         let three = words
             .iter()
             .filter(|word| word.len() == ch[0])
             .cloned()
             .into_iter()
-        .chain(words
-            .iter()
-            .filter(|word| word.len() == ch[1])
-            .cloned()
-            .into_iter()
-        ).chain(words
-            .iter()
-            .filter(|word| word.len() == ch[2])
-            .cloned()
-            .into_iter()
-        );
+            .chain(
+                words
+                    .iter()
+                    .filter(|word| word.len() == ch[1])
+                    .cloned()
+                    .into_iter(),
+            )
+            .chain(
+                words
+                    .iter()
+                    .filter(|word| word.len() == ch[2])
+                    .cloned()
+                    .into_iter(),
+            );
         let set: Vec<String> = three.collect();
         word_sets.insert(i, set);
     }
-    
-    
+
     let long: Vec<String> = words
         .iter()
         .cloned()
@@ -499,9 +504,7 @@ fn write_score(scores: &Score, mode: &Mode, options: &Modifiers) -> io::Result<(
     write!(
         &mut scores_file,
         "\nMode: {:<12}  :  Correct: {:<5} |  Errors: {:<5}",
-        mode_string,
-        scores.correct,
-        scores.errors
+        mode_string, scores.correct, scores.errors
     )?;
 
     match *mode {
@@ -564,7 +567,7 @@ fn main() -> io::Result<()> {
                             _ => return Err(String::from("Failed to parse arguments for Race. Please give u32 integers instead."))
                         }
                     }
-                    if args.len() == 3 && args[2] < args[1] {
+                    if args.len() == 3 && args[1] > args[2] {
                         return Err(String::from("The second argument for range must be greater than or equal to the first."));
                     }
                     Ok(())

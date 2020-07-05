@@ -1,1 +1,2 @@
 Mode: TimeAttack  :  Correct: 32    |  Errors: 0      |  Approx. WPM: 61
+Mode: TimeAttack    :  Correct: 24    |  Errors: 1      |  Approx. WPM: 59
