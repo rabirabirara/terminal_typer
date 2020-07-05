@@ -1,5 +1,5 @@
 # terminal_typer
-A Rust command-line typing game to acquaint with the language.
+A command-line typing game, made to help learn Rust.
 
 # Playing the game
 
